@@ -12,12 +12,16 @@
   color: #e8e6f0;
   font-family: var(--font-body, "Signika", sans-serif);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  /* Hidden overlays must not block clicks on Foundry underneath (GM working during a break). */
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
   overflow: auto;
 }
 
 #breaktime-overlay.bt-visible {
   opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease, visibility 0s;
 }
 
 #breaktime-overlay .bt-header {
@@ -34,7 +38,8 @@
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
-#breaktime-overlay .bt-end {
+#breaktime-overlay .bt-end,
+#breaktime-overlay .bt-hide {
   width: auto;
   padding: 0.5rem 1.25rem;
   font-size: 1.1rem;
@@ -48,6 +53,15 @@
 
 #breaktime-overlay .bt-end:hover {
   background: #4fa961;
+}
+
+#breaktime-overlay .bt-hide {
+  background: #4a4466;
+  border-color: #7a72a0;
+}
+
+#breaktime-overlay .bt-hide:hover {
+  background: #5a5380;
 }
 
 #breaktime-overlay .bt-body {
@@ -129,21 +143,25 @@
   font-variant-numeric: tabular-nums;
 }
 
-#breaktime-overlay .bt-scores {
+#breaktime-overlay .bt-scores,
+#breaktime-bar .bt-scores {
   margin: 0;
   padding-left: 1.2rem;
   font-size: 0.9rem;
 }
 
-#breaktime-overlay .bt-scores li {
+#breaktime-overlay .bt-scores li,
+#breaktime-bar .bt-scores li {
   padding: 0.1rem 0;
 }
 
-#breaktime-overlay .bt-scores li > * {
+#breaktime-overlay .bt-scores li > *,
+#breaktime-bar .bt-scores li > * {
   vertical-align: middle;
 }
 
-#breaktime-overlay .bt-scores .bt-name {
+#breaktime-overlay .bt-scores .bt-name,
+#breaktime-bar .bt-scores .bt-name {
   display: inline-block;
   max-width: 95px;
   overflow: hidden;
@@ -153,11 +171,142 @@
   padding-left: 0.35rem;
 }
 
-#breaktime-overlay .bt-scores .bt-score {
+#breaktime-overlay .bt-scores .bt-score,
+#breaktime-bar .bt-scores .bt-score {
   float: right;
   font-variant-numeric: tabular-nums;
 }
 
 #breaktime-overlay .bt-scores .bt-me {
   font-weight: bold;
+}
+
+#breaktime-overlay .bt-ready-count {
+  font-size: 1.1rem;
+  color: #a9a3c4;
+}
+
+#breaktime-overlay .bt-ready-count.bt-all-ready {
+  color: #6cc77c;
+  font-weight: bold;
+}
+
+#breaktime-overlay .bt-ready {
+  width: auto;
+  padding: 0.5rem 1.25rem;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #fff;
+  background: #3d4a8f;
+  border: 1px solid #6c7cc7;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#breaktime-overlay .bt-ready:hover {
+  background: #4a59a9;
+}
+
+#breaktime-overlay .bt-ready.bt-is-ready {
+  background: #3f8f4f;
+  border-color: #6cc77c;
+}
+
+#breaktime-overlay .bt-ready-mark,
+#breaktime-bar .bt-ready-mark {
+  margin-left: 0.3rem;
+  color: #6cc77c;
+}
+
+/* GM's "break in progress" bar, shown while the Tetris screen is put away. */
+#breaktime-bar {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem 0.4rem 0.9rem;
+  background: rgba(20, 18, 32, 0.92);
+  border: 1px solid #4a4466;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  color: #e8e6f0;
+  white-space: nowrap;
+}
+
+#breaktime-bar.bt-hidden {
+  display: none;
+}
+
+#breaktime-bar .bt-bar-title {
+  font-weight: bold;
+  color: #f5d77a;
+}
+
+#breaktime-bar .bt-ready-count {
+  color: #a9a3c4;
+}
+
+#breaktime-bar .bt-ready-count.bt-all-ready {
+  color: #6cc77c;
+  font-weight: bold;
+}
+
+#breaktime-bar button {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.7rem;
+  font-weight: bold;
+  color: #fff;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#breaktime-bar .bt-show {
+  background: #3d4a8f;
+  border: 1px solid #6c7cc7;
+}
+
+#breaktime-bar .bt-end {
+  background: #3f8f4f;
+  border: 1px solid #6cc77c;
+}
+
+#breaktime-bar .bt-scores-toggle {
+  background: #4a4466;
+  border: 1px solid #7a72a0;
+}
+
+#breaktime-bar .bt-scores-toggle[aria-expanded="true"] {
+  background: #5a5380;
+}
+
+/* Dropdown scoreboard under the bar. */
+#breaktime-bar .bt-bar-scores {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem;
+  background: rgba(20, 18, 32, 0.95);
+  border: 1px solid #4a4466;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  white-space: normal;
+}
+
+#breaktime-bar .bt-hidden {
+  display: none;
+}
+
+#breaktime-bar .bt-no-scores {
+  margin: 0;
+  color: #a9a3c4;
+  font-style: italic;
 }
