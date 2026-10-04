@@ -123,6 +123,7 @@ class BreakOverlay {
       <button type="button" class="bt-show"><i class="fa-solid fa-gamepad"></i> Play Tetris</button>
       <button type="button" class="bt-end"><i class="fa-solid fa-play"></i> End Break</button>
       <div class="bt-bar-scores bt-hidden">
+        <div class="bt-scores-head"><span>Player</span><span>Now</span><span>Best</span></div>
         <ol class="bt-scores"></ol>
         <p class="bt-no-scores">Nobody has started a game yet.</p>
       </div>`;
@@ -175,7 +176,11 @@ class BreakOverlay {
             <div><span>Level</span><strong data-stat="level">1</strong></div>
             <div><span>Best</span><strong data-stat="best">0</strong></div>
           </section>
-          <section class="bt-panel"><h2>Table</h2><ol class="bt-scores"></ol></section>
+          <section class="bt-panel">
+            <h2>Table</h2>
+            <div class="bt-scores-head"><span>Player</span><span>Now</span><span>Best</span></div>
+            <ol class="bt-scores"></ol>
+          </section>
         </aside>
       </div>`;
     document.body.append(el);
@@ -310,22 +315,31 @@ class BreakOverlay {
   static _scoreRow(s) {
     const li = document.createElement("li");
     if (s.userId === game.user.id) li.classList.add("bt-me");
+
     const name = document.createElement("span");
     name.className = "bt-name";
     name.style.borderColor = s.color;
-    name.textContent = s.name;
-    const score = document.createElement("span");
-    score.className = "bt-score";
-    score.textContent = `${s.score.toLocaleString()}${s.state === "over" ? " ✖" : ""}`;
-    score.title = `Best: ${s.best.toLocaleString()}`;
-    li.append(name);
+    const label = document.createElement("span");
+    label.className = "bt-name-text";
+    label.textContent = s.name;
+    name.append(label);
     if (s.ready) {
       const mark = document.createElement("i");
       mark.className = "fa-solid fa-check bt-ready-mark";
       mark.title = "Ready to continue";
-      li.append(mark);
+      name.append(mark);
     }
-    li.append(score);
+
+    const now = document.createElement("span");
+    now.className = "bt-score";
+    now.textContent = `${s.score.toLocaleString()}${s.state === "over" ? " ✖" : ""}`;
+    if (s.state === "over") now.title = "Game over";
+
+    const best = document.createElement("span");
+    best.className = "bt-best";
+    best.textContent = s.best.toLocaleString();
+
+    li.append(name, now, best);
     return li;
   }
 }
