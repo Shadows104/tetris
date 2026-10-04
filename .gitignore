@@ -1,0 +1,20 @@
+# Large/temporary files
+node_modules/
+temp/
+logs/
+*.log
+
+# Database locks
+*.db-journal
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Optional: exclude installed modules/systems if they're large
+# modules/
+# systems/
+
+# User data that changes frequently (optional)
+# You might want to exclude these if they're huge
+# worlds/*/data/
