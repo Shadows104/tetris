@@ -110,7 +110,7 @@ export class TetrisGame {
       case "ArrowLeft": this._move(-1, 0); break;
       case "ArrowRight": this._move(1, 0); break;
       case "ArrowDown":
-        if (this._move(0, 1)) { this.score += 1; this.dropTimer = 0; this._emit(); }
+        if (this._move(0, 1)) this.dropTimer = 0;
         break;
       case "ArrowUp":
       case "KeyX": this._rotate(rotateCW); break;
@@ -199,9 +199,7 @@ export class TetrisGame {
   }
 
   _hardDrop() {
-    const target = this._ghostY();
-    this.score += (target - this.piece.y) * 2;
-    this.piece.y = target;
+    this.piece.y = this._ghostY();
     this._lock();
   }
 
