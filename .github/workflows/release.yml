@@ -1,0 +1,40 @@
+# Publishes a Foundry-installable release whenever a version tag (e.g. v1.2.0) is pushed.
+# The release carries module.json (the manifest Foundry polls for updates) and module.zip.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version and URLs into module.json
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
+          jq --arg v "$VERSION" --arg repo "$REPO_URL" --arg tag "$GITHUB_REF_NAME" '
+            .version = $v
+            | .url = $repo
+            | .manifest = "\($repo)/releases/latest/download/module.json"
+            | .download = "\($repo)/releases/download/\($tag)/module.zip"
+          ' module.json > module.json.tmp
+          mv module.json.tmp module.json
+          cat module.json
+
+      - name: Build module.zip
+        run: zip -r module.zip module.json scripts styles
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            module.json
+            module.zip
+          generate_release_notes: true
