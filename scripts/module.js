@@ -1,4 +1,4 @@
-import { TetrisGame, COLS, ROWS, CELL } from "./tetris.js";
+import { GAMES, DEFAULT_GAME } from "./games/index.js";
 
 const MODULE_ID = "tetris";
 const SOCKET = `module.${MODULE_ID}`;
@@ -11,8 +11,35 @@ function isBreakActive() {
   return game.settings.get(MODULE_ID, "breakActive");
 }
 
-async function startBreak() {
+function breakGame() {
+  return GAMES[game.settings.get(MODULE_ID, "breakGame")] ?? GAMES[DEFAULT_GAME];
+}
+
+/** Ask the GM which game to play. Resolves to a game id, or null if they close the dialog. */
+async function chooseGame() {
+  const last = breakGame().id;
+  return foundry.applications.api.DialogV2.wait({
+    window: { title: "Start a Break", icon: "fa-solid fa-mug-hot" },
+    content: "<p>Which game should everyone play during the break?</p>",
+    buttons: Object.values(GAMES).map(G => ({
+      action: G.id,
+      label: G.label,
+      icon: G.icon,
+      default: G.id === last
+    })),
+    rejectClose: false
+  });
+}
+
+/**
+ * Start a break for everyone.
+ * @param {string} [gameId]  Which game to play; if omitted, the GM is asked.
+ */
+async function startBreak(gameId) {
   if (!game.user.isGM || isBreakActive()) return;
+  gameId ??= await chooseGame();
+  if (!GAMES[gameId] || isBreakActive()) return;
+  await game.settings.set(MODULE_ID, "breakGame", gameId);
   // Remember whether the game was already paused so ending the break restores it exactly.
   await game.settings.set(MODULE_ID, "wasPaused", game.paused);
   if (!game.paused) game.togglePause(true, { broadcast: true });
@@ -35,14 +62,15 @@ function toggleBreak() {
 
 class BreakOverlay {
   static active = false;    // a break is running on this client
-  static visible = false;   // the Tetris screen is showing
+  static visible = false;   // the game screen is showing
+  static Game = null;       // the game class chosen for this break
   static element = null;
-  static bar = null;        // GM-only "break in progress" bar shown while the Tetris screen is hidden
+  static bar = null;        // GM-only "break in progress" bar shown while the game screen is hidden
   static game = null;
   static scores = new Map(); // userId -> {name, color, score, best, state, ready}
   static stats = null;
   static ready = false;
-  static _joined = false;   // whether this user has opened the Tetris screen this break
+  static _joined = false;   // whether this user has opened the game screen this break
   static _allReadyNotified = false;
 
   /** Called on every client when a break starts (or on load during one). */
@@ -53,7 +81,7 @@ class BreakOverlay {
     this.ready = false;
     this._joined = false;
     this._allReadyNotified = false;
-    this.stats = { score: 0, best: 0, lines: 0, level: 1, state: "idle" };
+    this.Game = breakGame();
     this._build();
 
     if (!game.user.isGM || game.settings.get(MODULE_ID, "gmShowsTetris")) this.show();
@@ -78,7 +106,7 @@ class BreakOverlay {
     this.bar = null;
   }
 
-  /** Bring the Tetris screen up and route keyboard input to it. */
+  /** Bring the game screen up and route keyboard input to it. */
   static show() {
     if (!this.active || this.visible) return;
     this.visible = true;
@@ -92,14 +120,14 @@ class BreakOverlay {
     }
   }
 
-  /** Open or close the GM's Tetris board without affecting the break. */
+  /** Open or close the GM's game board without affecting the break. */
   static toggle() {
     if (!this.active || !game.user.isGM) return;
     if (this.visible) this.hide();
     else this.show();
   }
 
-  /** Put the Tetris screen away without ending the break (GM only). */
+  /** Put the game screen away without ending the break (GM only). */
   static hide() {
     if (!this.visible) return;
     this.visible = false;
@@ -120,7 +148,7 @@ class BreakOverlay {
       <span class="bt-bar-title"><i class="fa-solid fa-mug-hot"></i> Break in progress</span>
       <span class="bt-ready-count"></span>
       <button type="button" class="bt-scores-toggle" aria-expanded="false"><i class="fa-solid fa-trophy"></i> Scores</button>
-      <button type="button" class="bt-show"><i class="fa-solid fa-gamepad"></i> Play Tetris</button>
+      <button type="button" class="bt-show"><i class="${this.Game.icon}"></i> Play ${this.Game.label}</button>
       <button type="button" class="bt-end"><i class="fa-solid fa-play"></i> End Break</button>
       <div class="bt-bar-scores bt-hidden">
         <div class="bt-scores-head"><span>Player</span><span>Now</span><span>Best</span></div>
@@ -139,11 +167,18 @@ class BreakOverlay {
   }
 
   static _build() {
+    const G = this.Game;
+    const preview = (kind, title) =>
+      G.panels[kind] ? `<section class="bt-panel"><h2>${title}</h2><canvas class="bt-${kind}" width="110" height="80"></canvas></section>` : "";
+    const controls = G.controls.map(([keys, action]) => `<dt>${keys}</dt><dd>${action}</dd>`).join("");
+    const stats = G.stats.map(([key, label]) => `<div><span>${label}</span><strong data-stat="${key}">0</strong></div>`).join("");
+
     const el = document.createElement("div");
     el.id = "breaktime-overlay";
+    el.dataset.game = G.id;
     el.innerHTML = `
       <header class="bt-header">
-        <h1><i class="fa-solid fa-mug-hot"></i> Break Time</h1>
+        <h1><i class="fa-solid fa-mug-hot"></i> Break Time <small><i class="${G.icon}"></i> ${G.label}</small></h1>
         <span class="bt-ready-count"></span>
         ${game.user.isGM
           ? `<button type="button" class="bt-hide"><i class="fa-solid fa-pen-ruler"></i> Back to Foundry</button>
@@ -152,30 +187,13 @@ class BreakOverlay {
       </header>
       <div class="bt-body">
         <aside class="bt-side">
-          <section class="bt-panel"><h2>Hold</h2><canvas class="bt-hold" width="110" height="80"></canvas></section>
-          <section class="bt-panel bt-help">
-            <h2>Controls</h2>
-            <dl>
-              <dt>← →</dt><dd>Move</dd>
-              <dt>↓</dt><dd>Soft drop</dd>
-              <dt>Space</dt><dd>Hard drop</dd>
-              <dt>↑ / X</dt><dd>Rotate right</dd>
-              <dt>Z</dt><dd>Rotate left</dd>
-              <dt>C / Shift</dt><dd>Hold</dd>
-              <dt>P / Esc</dt><dd>Pause</dd>
-              <dt>Enter</dt><dd>Start</dd>
-            </dl>
-          </section>
+          ${preview("hold", "Hold")}
+          <section class="bt-panel bt-help"><h2>Controls</h2><dl>${controls}</dl></section>
         </aside>
-        <canvas class="bt-board" width="${COLS * CELL}" height="${ROWS * CELL}" tabindex="0"></canvas>
+        <canvas class="bt-board" width="${G.width}" height="${G.height}" tabindex="0"></canvas>
         <aside class="bt-side">
-          <section class="bt-panel"><h2>Next</h2><canvas class="bt-next" width="110" height="80"></canvas></section>
-          <section class="bt-panel bt-stats">
-            <div><span>Score</span><strong data-stat="score">0</strong></div>
-            <div><span>Lines</span><strong data-stat="lines">0</strong></div>
-            <div><span>Level</span><strong data-stat="level">1</strong></div>
-            <div><span>Best</span><strong data-stat="best">0</strong></div>
-          </section>
+          ${preview("next", "Next")}
+          <section class="bt-panel bt-stats">${stats}</section>
           <section class="bt-panel">
             <h2>Table</h2>
             <div class="bt-scores-head"><span>Player</span><span>Now</span><span>Best</span></div>
@@ -198,7 +216,7 @@ class BreakOverlay {
       if (this.game.state === "idle" || this.game.state === "over") this.game.start();
     });
 
-    this.game = new TetrisGame(
+    this.game = new G(
       {
         board: el.querySelector(".bt-board"),
         next: el.querySelector(".bt-next"),
@@ -206,6 +224,7 @@ class BreakOverlay {
       },
       stats => this._onStats(stats)
     );
+    this._onStats(this.game.getStats());
   }
 
   /**
@@ -303,7 +322,7 @@ class BreakOverlay {
     this._allReadyNotified = allReady;
   }
 
-  /** Draw the scoreboard in the Tetris screen and in the GM's bar dropdown. */
+  /** Draw the scoreboard in the game screen and in the GM's bar dropdown. */
   static _renderScores() {
     const rows = [...this.scores.values()].sort((a, b) => b.best - a.best || b.score - a.score);
     for (const list of document.querySelectorAll("#breaktime-overlay .bt-scores, #breaktime-bar .bt-scores")) {
@@ -357,7 +376,7 @@ Hooks.once("init", () => {
     onChange: active => {
       if (active) {
         BreakOverlay.start();
-        ui.notifications.info("The GM has called a break. Enjoy some Tetris!");
+        ui.notifications.info(`The GM has called a break. Enjoy some ${BreakOverlay.Game.label}!`);
       } else {
         BreakOverlay.stop();
         ui.notifications.info("Break's over. Back to the game!");
@@ -367,9 +386,19 @@ Hooks.once("init", () => {
     }
   });
 
+  // The game chosen for the current (or most recent) break. Set before breakActive flips,
+  // so every client knows which game to build when the break starts.
+  game.settings.register(MODULE_ID, "breakGame", {
+    scope: "world",
+    config: false,
+    type: String,
+    default: DEFAULT_GAME
+  });
+
+  // Key kept as "gmShowsTetris" so GMs' existing choice carries over.
   game.settings.register(MODULE_ID, "gmShowsTetris", {
-    name: "GM: Open Tetris when a break starts",
-    hint: "Only affects the GM. When off, starting a break leaves you in Foundry with a small break bar, so you can keep prepping; click Play Tetris on the bar to join in. Players always get Tetris.",
+    name: "GM: Open the game when a break starts",
+    hint: "Only affects the GM. When off, starting a break leaves you in Foundry with a small break bar, so you can keep prepping; click Play on the bar to join in. Players always get the game.",
     scope: "client",
     config: true,
     type: Boolean,
@@ -384,8 +413,8 @@ Hooks.once("init", () => {
   });
 
   game.keybindings.register(MODULE_ID, "breakShortcut", {
-    name: "Start Break / Show or Hide Tetris",
-    hint: "Starts a break for everyone. During a break, opens or closes your own Tetris board; it never ends the break (use the End Break button for that).",
+    name: "Start Break / Show or Hide Game",
+    hint: "Starts a break for everyone (you'll be asked which game). During a break, opens or closes your own game board; it never ends the break (use the End Break button for that).",
     editable: [{ key: "KeyB", modifiers: ["Control", "Shift"] }],
     restricted: true,
     onDown: () => {
@@ -402,6 +431,7 @@ Hooks.once("ready", () => {
     endBreak,
     toggleBreak,
     isBreakActive,
+    games: Object.keys(GAMES),
     toggleBoard: () => BreakOverlay.toggle()
   };
 
@@ -422,11 +452,11 @@ Hooks.on("userConnected", (user, connected) => {
 
 Hooks.on("getSceneControlButtons", controls => {
   // During a break the button is removed, so the break can only be ended deliberately
-  // from the End Break button on the Tetris screen or the GM's break bar.
+  // from the End Break button on the game screen or the GM's break bar.
   if (!game.user.isGM || (game.ready && isBreakActive())) return;
   const tool = {
     name: "breaktime",
-    title: "Start Break (Tetris)",
+    title: "Start Break",
     icon: "fa-solid fa-mug-hot",
     button: true,
     visible: true,

@@ -31,10 +31,24 @@ jobs:
       - name: Build module.zip
         run: zip -r module.zip module.json scripts styles
 
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Everything under "## [VERSION]" up to the next "## [" heading or the link references.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md)." > release-notes.md
+          fi
+          cat release-notes.md
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-notes.md
           files: |
             module.json
             module.zip
-          generate_release_notes: true

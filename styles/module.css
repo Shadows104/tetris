@@ -38,6 +38,14 @@
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
+#breaktime-overlay h1 small {
+  margin-left: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: normal;
+  color: #a9a3c4;
+  text-shadow: none;
+}
+
 #breaktime-overlay .bt-end,
 #breaktime-overlay .bt-hide {
   width: auto;

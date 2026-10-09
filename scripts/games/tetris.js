@@ -1,4 +1,6 @@
-// Self-contained Tetris engine rendered onto <canvas> elements.
+// Tetris engine rendered onto <canvas> elements. See common.js for the game contract.
+
+import { drawStateMessage, handleCommonKey } from "./common.js";
 
 export const COLS = 10;
 export const ROWS = 20;
@@ -26,6 +28,24 @@ function rotateCCW(m) {
 }
 
 export class TetrisGame {
+  static id = "tetris";
+  static label = "Tetris";
+  static icon = "fa-solid fa-shapes";
+  static width = COLS * CELL;
+  static height = ROWS * CELL;
+  static panels = { hold: true, next: true };
+  static stats = [["score", "Score"], ["lines", "Lines"], ["level", "Level"], ["best", "Best"]];
+  static controls = [
+    ["← →", "Move"],
+    ["↓", "Soft drop"],
+    ["Space", "Hard drop"],
+    ["↑ / X", "Rotate right"],
+    ["Z", "Rotate left"],
+    ["C / Shift", "Hold"],
+    ["P / Esc", "Pause"],
+    ["Enter", "Start"]
+  ];
+
   /**
    * @param {object} els
    * @param {HTMLCanvasElement} els.board
@@ -83,8 +103,9 @@ export class TetrisGame {
     this._raf = null;
   }
 
+  /** Milliseconds per row of gravity: 550ms at level 1, ~20% faster each level, floor 50ms. */
   get dropInterval() {
-    return Math.max(60, 1000 * Math.pow(0.82, this.level - 1));
+    return Math.max(50, 550 * Math.pow(0.8, this.level - 1));
   }
 
   /* ---------------------------------------- */
@@ -93,17 +114,7 @@ export class TetrisGame {
 
   /** @returns {boolean} whether the key was used by the game */
   handleKey(code) {
-    if (code === "Enter" && (this.state === "idle" || this.state === "over")) {
-      this.start();
-      return true;
-    }
-    if (code === "KeyP" || code === "Escape") {
-      if (this.state === "playing" || this.state === "paused") {
-        this.togglePause();
-        return true;
-      }
-      return false;
-    }
+    if (handleCommonKey(this, code)) return true;
     if (this.state !== "playing") return false;
 
     switch (code) {
@@ -250,15 +261,13 @@ export class TetrisGame {
     this.render();
   }
 
+  getStats() {
+    return { score: this.score, best: this.best, lines: this.lines, level: this.level, state: this.state };
+  }
+
   _emit() {
     this.best = Math.max(this.best, this.score);
-    this.onStats?.({
-      score: this.score,
-      best: this.best,
-      lines: this.lines,
-      level: this.level,
-      state: this.state
-    });
+    this.onStats?.(this.getStats());
   }
 
   _frame(now) {
@@ -307,21 +316,7 @@ export class TetrisGame {
       this._drawShape(ctx, p.shape, p.x, p.y, color, CELL, 1);
     }
 
-    if (this.state !== "playing") {
-      const msg = {
-        idle: ["Break Time!", "Press Enter to play"],
-        paused: ["Paused", "Press P to resume"],
-        over: ["Game Over", "Press Enter to play again"]
-      }[this.state];
-      ctx.fillStyle = "rgba(0,0,0,0.65)";
-      ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL);
-      ctx.fillStyle = "#fff";
-      ctx.textAlign = "center";
-      ctx.font = "bold 28px sans-serif";
-      ctx.fillText(msg[0], (COLS * CELL) / 2, (ROWS * CELL) / 2 - 10);
-      ctx.font = "16px sans-serif";
-      ctx.fillText(msg[1], (COLS * CELL) / 2, (ROWS * CELL) / 2 + 20);
-    }
+    if (this.state !== "playing") drawStateMessage(ctx, COLS * CELL, ROWS * CELL, this.state);
 
     this._renderPreview(this.nextCtx, this.queue[0]);
     this._renderPreview(this.holdCtx, this.holdType, !this.canHold);
